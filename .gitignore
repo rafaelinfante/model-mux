@@ -1,0 +1,32 @@
+# Build output
+target/
+build/
+dist/
+*.jar
+!.mvn/wrapper/maven-wrapper.jar
+
+# Node / Angular
+node_modules/
+.angular/
+frontend/dist/
+npm-debug.log*
+yarn-error.log*
+
+# Environment & secrets
+.env
+*.env
+!.env.example
+
+# IDE / editor
+.idea/
+*.iml
+.vscode/
+*.swp
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# OS / misc
+.gradle/

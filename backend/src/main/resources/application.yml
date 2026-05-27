@@ -1,0 +1,120 @@
+spring:
+  application:
+    name: model-mux
+  mvc:
+    problemdetails:
+      enabled: true
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:modelmux}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: ${MYSQL_USER:modelmux}
+    password: ${MYSQL_PASSWORD:modelmux}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate.jdbc.time_zone: UTC
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+  ai:
+    # The gateway builds its provider models itself (see ProvidersConfiguration) with resilience owned
+    # by Resilience4j, so Spring AI's model auto-configuration is turned off. Nothing is wired from a
+    # key at startup and the app boots on the mock providers alone.
+    model:
+      chat: none
+      embedding: none
+      image: none
+      moderation: none
+      audio:
+        speech: none
+        transcription: none
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics, prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+  metrics:
+    tags:
+      application: model-mux
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+
+modelmux:
+  routing:
+    default-mode: COST
+    failover-order: [anthropic, openai, mock-smart, mock-fast]
+  providers:
+    - id: mock-fast
+      type: mock
+      model: mux-mini
+      tier: CHEAP
+      enabled: true
+      mock:
+        base-latency-ms: 90
+        per-token-latency-micros: 250
+        persona: concise
+    - id: mock-smart
+      type: mock
+      model: mux-large
+      tier: PREMIUM
+      enabled: true
+      mock:
+        base-latency-ms: 350
+        per-token-latency-micros: 600
+        persona: detailed
+    - id: anthropic
+      type: anthropic
+      model: ${MODELMUX_ANTHROPIC_MODEL:claude-haiku-4-5}
+      tier: PREMIUM
+      enabled: ${MODELMUX_ANTHROPIC_ENABLED:false}
+      api-key: ${MODELMUX_ANTHROPIC_API_KEY:}
+    - id: openai
+      type: openai
+      model: ${MODELMUX_OPENAI_MODEL:gpt-4o-mini}
+      tier: PREMIUM
+      enabled: ${MODELMUX_OPENAI_ENABLED:false}
+      api-key: ${MODELMUX_OPENAI_API_KEY:}
+  pricing:
+    mux-mini: { input-per-million: 0.20, output-per-million: 0.80 }
+    mux-large: { input-per-million: 3.00, output-per-million: 15.00 }
+    claude-haiku-4-5: { input-per-million: 0.80, output-per-million: 4.00 }
+    gpt-4o-mini: { input-per-million: 0.15, output-per-million: 0.60 }
+  budgets:
+    enabled: true
+    default-daily-usd: 1.00
+    over-budget-action: DOWNGRADE
+  rate-limit:
+    enabled: true
+    requests-per-minute: 120
+  cache:
+    enabled: true
+    max-entries: 1000
+    ttl: PT10M
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        sliding-window-size: 12
+        minimum-number-of-calls: 6
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 8s
+        permitted-number-of-calls-in-half-open-state: 3
+        record-exceptions:
+          - net.rafaelinfante.modelmux.provider.TransientProviderException
+        register-health-indicator: true
+  retry:
+    configs:
+      default:
+        max-attempts: 3
+        wait-duration: 150ms
+        retry-exceptions:
+          - net.rafaelinfante.modelmux.provider.TransientProviderException
