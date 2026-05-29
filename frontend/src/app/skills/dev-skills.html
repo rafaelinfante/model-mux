@@ -1,0 +1,191 @@
+<div class="grid gap-6 lg:grid-cols-3">
+  <!-- PR summary -->
+  <div class="flex flex-col rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-3">
+    <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-500">PR summary</h3>
+    <p class="mt-1 text-sm text-slate-500">
+      LLM review plus a deterministic style check. The two are kept visually distinct.
+    </p>
+
+    <div class="mt-4 grid gap-4 md:grid-cols-2">
+      <div>
+        <label class="block text-sm font-medium text-slate-700" for="pr-diff">Diff</label>
+        <textarea
+          id="pr-diff"
+          [ngModel]="diff()"
+          (ngModelChange)="diff.set($event)"
+          rows="8"
+          placeholder="Paste a unified diff..."
+          class="mt-1 w-full resize-y rounded-lg border border-slate-300 px-3 py-2 font-mono text-xs text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+        ></textarea>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700" for="pr-java">
+          Java source <span class="font-normal text-slate-400">(optional, enables style check)</span>
+        </label>
+        <textarea
+          id="pr-java"
+          [ngModel]="prJavaSource()"
+          (ngModelChange)="prJavaSource.set($event)"
+          rows="8"
+          placeholder="Paste the changed Java file..."
+          class="mt-1 w-full resize-y rounded-lg border border-slate-300 px-3 py-2 font-mono text-xs text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+        ></textarea>
+      </div>
+    </div>
+
+    <button
+      type="button"
+      (click)="runPrSummary()"
+      [disabled]="diff().trim().length === 0 || prLoading()"
+      class="mt-4 inline-flex w-fit items-center justify-center rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+    >
+      {{ prLoading() ? 'Reviewing...' : 'Summarize PR' }}
+    </button>
+
+    @if (prError()) {
+      <div class="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        {{ prError() }}
+      </div>
+    }
+
+    @if (prResult(); as pr) {
+      <div class="mt-5 grid gap-5 lg:grid-cols-2">
+        <!-- LLM judgment -->
+        <div class="rounded-xl border border-indigo-200 bg-indigo-50/40 p-5">
+          <div class="flex items-center gap-2">
+            <span class="rounded-full bg-indigo-600 px-2.5 py-0.5 text-xs font-semibold text-white">LLM judgment</span>
+            <span class="text-xs text-slate-500">{{ pr.meta.provider }} &middot; {{ pr.meta.model }}</span>
+          </div>
+
+          <p class="mt-3 text-sm leading-relaxed text-slate-800">{{ pr.review.summary }}</p>
+
+          @if (pr.review.risks.length > 0) {
+            <h5 class="mt-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Risks</h5>
+            <ul class="mt-2 space-y-2">
+              @for (risk of pr.review.risks; track $index) {
+                <li class="flex gap-2 text-sm">
+                  <span [class]="'h-fit rounded-full px-2 py-0.5 text-xs font-semibold ' + severityClasses(risk.severity)">
+                    {{ risk.severity }}
+                  </span>
+                  <span class="text-slate-700">
+                    <span class="font-medium text-slate-900">{{ risk.area }}:</span> {{ risk.detail }}
+                  </span>
+                </li>
+              }
+            </ul>
+          }
+
+          @if (pr.review.testGaps.length > 0) {
+            <h5 class="mt-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Test gaps</h5>
+            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
+              @for (gap of pr.review.testGaps; track $index) {
+                <li>{{ gap }}</li>
+              }
+            </ul>
+          }
+        </div>
+
+        <!-- Deterministic tool -->
+        <div class="rounded-xl border border-slate-300 bg-slate-50 p-5">
+          <div class="flex items-center gap-2">
+            <span class="rounded-full bg-slate-700 px-2.5 py-0.5 text-xs font-semibold text-white">Deterministic</span>
+            <span class="text-xs text-slate-500">google-java-format</span>
+          </div>
+
+          @if (!pr.styleCheck.checked) {
+            <p class="mt-3 text-sm text-slate-500">
+              No Java source supplied, so the formatter did not run.
+            </p>
+          } @else if (pr.styleCheck.error) {
+            <div class="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {{ pr.styleCheck.error }}
+            </div>
+          } @else {
+            <p class="mt-3 text-sm">
+              <span class="font-medium text-slate-700">Compliant:</span>
+              @if (pr.styleCheck.compliant) {
+                <span class="ml-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">yes</span>
+              } @else {
+                <span class="ml-1 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-700">no</span>
+              }
+            </p>
+            @if (pr.styleCheck.formattedSource) {
+              <h5 class="mt-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Formatted source</h5>
+              <pre class="mt-2 max-h-72 overflow-auto rounded-lg bg-slate-900 p-3 font-mono text-xs leading-relaxed text-slate-100">{{ pr.styleCheck.formattedSource }}</pre>
+            }
+          }
+        </div>
+      </div>
+    }
+  </div>
+
+  <!-- Test stub -->
+  <div class="flex flex-col rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+    <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Test stub</h3>
+    <p class="mt-1 text-sm text-slate-500">Generate a JUnit skeleton for a Java class.</p>
+
+    <label class="sr-only" for="stub-src">Java source</label>
+    <textarea
+      id="stub-src"
+      [ngModel]="stubSource()"
+      (ngModelChange)="stubSource.set($event)"
+      rows="6"
+      placeholder="Paste a Java class..."
+      class="mt-3 w-full resize-y rounded-lg border border-slate-300 px-3 py-2 font-mono text-xs text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+    ></textarea>
+
+    <button
+      type="button"
+      (click)="runTestStub()"
+      [disabled]="stubSource().trim().length === 0 || stubLoading()"
+      class="mt-3 inline-flex w-fit items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+    >
+      {{ stubLoading() ? 'Generating...' : 'Generate stub' }}
+    </button>
+
+    @if (stubError()) {
+      <div class="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        {{ stubError() }}
+      </div>
+    }
+    @if (stubResult(); as s) {
+      <pre class="mt-3 max-h-80 overflow-auto rounded-lg bg-slate-900 p-3 font-mono text-xs leading-relaxed text-slate-100">{{ s.testSource }}</pre>
+    }
+  </div>
+
+  <!-- Health digest -->
+  <div class="flex flex-col rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-2">
+    <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Health digest</h3>
+    <p class="mt-1 text-sm text-slate-500">Turn raw metrics into a readable status summary.</p>
+
+    <label class="sr-only" for="digest-metrics">Metrics</label>
+    <textarea
+      id="digest-metrics"
+      [ngModel]="metrics()"
+      (ngModelChange)="metrics.set($event)"
+      rows="6"
+      placeholder="Paste metrics, log lines, or counters..."
+      class="mt-3 w-full resize-y rounded-lg border border-slate-300 px-3 py-2 font-mono text-xs text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+    ></textarea>
+
+    <button
+      type="button"
+      (click)="runHealthDigest()"
+      [disabled]="metrics().trim().length === 0 || digestLoading()"
+      class="mt-3 inline-flex w-fit items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+    >
+      {{ digestLoading() ? 'Summarizing...' : 'Digest' }}
+    </button>
+
+    @if (digestError()) {
+      <div class="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        {{ digestError() }}
+      </div>
+    }
+    @if (digestResult(); as d) {
+      <div class="mt-3 rounded-lg bg-slate-50 p-4 text-sm leading-relaxed text-slate-800">
+        {{ d.digest }}
+      </div>
+    }
+  </div>
+</div>

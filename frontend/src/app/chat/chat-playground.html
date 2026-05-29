@@ -1,0 +1,170 @@
+<div class="grid gap-6 lg:grid-cols-2">
+  <!-- Request panel -->
+  <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+    <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Request</h3>
+
+    <label class="mt-4 block text-sm font-medium text-slate-700" for="chat-prompt">Prompt</label>
+    <textarea
+      id="chat-prompt"
+      [ngModel]="prompt()"
+      (ngModelChange)="prompt.set($event)"
+      rows="6"
+      placeholder="Ask the gateway anything..."
+      class="mt-1 w-full resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+    ></textarea>
+
+    <div class="mt-4">
+      <span class="block text-sm font-medium text-slate-700">Routing mode</span>
+      <div class="mt-2 inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+        @for (m of modes; track m) {
+          <button
+            type="button"
+            (click)="mode.set(m)"
+            [class]="
+              mode() === m
+                ? 'rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm'
+                : 'rounded-md px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-slate-900'
+            "
+          >
+            {{ m }}
+          </button>
+        }
+      </div>
+    </div>
+
+    @if (mode() === 'EXPLICIT') {
+      <div class="mt-4">
+        <label class="block text-sm font-medium text-slate-700" for="chat-provider">Provider</label>
+        <select
+          id="chat-provider"
+          [ngModel]="provider()"
+          (ngModelChange)="provider.set($event)"
+          class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+        >
+          @for (p of providers(); track p.id) {
+            <option [value]="p.id">{{ p.displayName }} ({{ p.model }})</option>
+          }
+          @if (providers().length === 0) {
+            <option value="" disabled>No providers available</option>
+          }
+        </select>
+      </div>
+    }
+
+    <div class="mt-4 grid grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm font-medium text-slate-700" for="chat-temp">Temperature</label>
+        <input
+          id="chat-temp"
+          type="number"
+          step="0.1"
+          min="0"
+          max="2"
+          [ngModel]="temperature()"
+          (ngModelChange)="temperature.set($event)"
+          placeholder="default"
+          class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+        />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700" for="chat-max">Max tokens</label>
+        <input
+          id="chat-max"
+          type="number"
+          min="1"
+          [ngModel]="maxTokens()"
+          (ngModelChange)="maxTokens.set($event)"
+          placeholder="default"
+          class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+        />
+      </div>
+    </div>
+
+    <label class="mt-4 flex items-center gap-2 text-sm text-slate-700">
+      <input
+        type="checkbox"
+        [ngModel]="forceFailover()"
+        (ngModelChange)="forceFailover.set($event)"
+        class="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+      />
+      Force failover
+    </label>
+
+    <button
+      type="button"
+      (click)="send()"
+      [disabled]="!canSend()"
+      class="mt-6 inline-flex w-full items-center justify-center rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+    >
+      {{ loading() ? 'Sending...' : 'Send' }}
+    </button>
+  </div>
+
+  <!-- Result panel -->
+  <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+    <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Response</h3>
+
+    @if (error()) {
+      <div class="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        {{ error() }}
+      </div>
+    }
+
+    @if (!error() && !result() && !loading()) {
+      <p class="mt-4 text-sm text-slate-400">Send a prompt to see the routed answer and metrics.</p>
+    }
+
+    @if (loading()) {
+      <p class="mt-4 animate-pulse text-sm text-slate-400">Routing your prompt...</p>
+    }
+
+    @if (result(); as r) {
+      <div class="mt-4 flex flex-wrap items-center gap-2">
+        <span [class]="'rounded-full px-3 py-1 text-xs font-semibold ' + tierClasses(r.tier)">
+          answered by {{ r.provider }} ({{ r.model }})
+        </span>
+        <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+          {{ r.routeMode }}
+        </span>
+        <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+          {{ r.tier }}
+        </span>
+        @if (r.cacheHit) {
+          <span class="rounded-full bg-sky-100 px-3 py-1 text-xs font-medium text-sky-700">cache hit</span>
+        }
+        @if (r.failedOver) {
+          <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700">failed over</span>
+        }
+      </div>
+
+      <pre class="mt-4 max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-4 text-sm leading-relaxed text-slate-800">{{ r.content }}</pre>
+
+      <dl class="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-3">
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Prompt tokens</dt>
+          <dd class="font-medium text-slate-800">{{ r.promptTokens }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Completion tokens</dt>
+          <dd class="font-medium text-slate-800">{{ r.completionTokens }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Total tokens</dt>
+          <dd class="font-medium text-slate-800">{{ r.totalTokens }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Cost</dt>
+          <dd class="font-medium text-slate-800">{{ formatUsd(r.costUsd) }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Latency</dt>
+          <dd class="font-medium text-slate-800">{{ r.latencyMs }} ms</dd>
+        </div>
+        <div>
+          <dt class="text-xs uppercase tracking-wide text-slate-400">Finish</dt>
+          <dd class="font-medium text-slate-800">{{ r.finishReason }}</dd>
+        </div>
+      </dl>
+    }
+  </div>
+</div>

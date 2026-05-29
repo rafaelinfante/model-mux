@@ -1,0 +1,52 @@
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: modelmux
+      MYSQL_USER: modelmux
+      MYSQL_PASSWORD: modelmux
+      MYSQL_ROOT_PASSWORD: rootpw
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-prootpw"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+  backend:
+    build: ./backend
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: modelmux
+      MYSQL_USER: modelmux
+      MYSQL_PASSWORD: modelmux
+      # Real providers are off by default — the gateway runs on the mock providers with no keys.
+      # Set <PROVIDER>_ENABLED=true and the matching API key to light up Anthropic/OpenAI.
+      MODELMUX_ANTHROPIC_ENABLED: ${MODELMUX_ANTHROPIC_ENABLED:-false}
+      MODELMUX_ANTHROPIC_API_KEY: ${MODELMUX_ANTHROPIC_API_KEY:-}
+      MODELMUX_ANTHROPIC_MODEL: ${MODELMUX_ANTHROPIC_MODEL:-claude-haiku-4-5}
+      MODELMUX_OPENAI_ENABLED: ${MODELMUX_OPENAI_ENABLED:-false}
+      MODELMUX_OPENAI_API_KEY: ${MODELMUX_OPENAI_API_KEY:-}
+      MODELMUX_OPENAI_MODEL: ${MODELMUX_OPENAI_MODEL:-gpt-4o-mini}
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - "8088:80"
+
+volumes:
+  mysql-data:

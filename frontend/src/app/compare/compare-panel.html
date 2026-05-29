@@ -1,0 +1,90 @@
+<div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+  <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Ask both</h3>
+  <p class="mt-1 text-sm text-slate-500">
+    Run the same prompt across providers and compare answers, cost, and latency.
+  </p>
+
+  <label class="mt-4 block text-sm font-medium text-slate-700" for="compare-prompt">Prompt</label>
+  <textarea
+    id="compare-prompt"
+    [ngModel]="prompt()"
+    (ngModelChange)="prompt.set($event)"
+    rows="4"
+    placeholder="One prompt, every provider..."
+    class="mt-1 w-full resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+  ></textarea>
+
+  <button
+    type="button"
+    (click)="send()"
+    [disabled]="!canSend()"
+    class="mt-4 inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+  >
+    {{ loading() ? 'Comparing...' : 'Compare' }}
+  </button>
+
+  @if (error()) {
+    <div class="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+      {{ error() }}
+    </div>
+  }
+</div>
+
+@if (result(); as r) {
+  <div class="mt-6 grid gap-6 md:grid-cols-2">
+    @for (arm of r.arms; track arm.providerId) {
+      <div
+        [class]="
+          'rounded-2xl border bg-white p-5 shadow-sm ' +
+          (arm.ok ? 'border-slate-200' : 'border-red-200')
+        "
+      >
+        <div class="flex items-start justify-between gap-2">
+          <div>
+            <p class="font-semibold text-slate-900">{{ arm.displayName }}</p>
+            <p class="text-xs text-slate-500">{{ arm.model }}</p>
+          </div>
+          <span [class]="'rounded-full px-2.5 py-0.5 text-xs font-semibold ' + tierClasses(arm.tier)">
+            {{ arm.tier }}
+          </span>
+        </div>
+
+        <div class="mt-2 flex flex-wrap gap-1.5">
+          @if (arm.providerId === fastestId()) {
+            <span class="rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-semibold text-indigo-700">
+              fastest
+            </span>
+          }
+          @if (arm.providerId === cheapestId()) {
+            <span class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
+              cheapest
+            </span>
+          }
+        </div>
+
+        @if (arm.ok) {
+          <pre class="mt-3 max-h-56 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-3 text-sm leading-relaxed text-slate-800">{{ arm.content }}</pre>
+
+          <dl class="mt-3 grid grid-cols-3 gap-3 text-sm">
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">Tokens</dt>
+              <dd class="font-medium text-slate-800">{{ arm.usage.totalTokens }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">Cost</dt>
+              <dd class="font-medium text-slate-800">{{ formatUsd(arm.costUsd) }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-slate-400">Latency</dt>
+              <dd class="font-medium text-slate-800">{{ arm.latencyMs }} ms</dd>
+            </div>
+          </dl>
+        } @else {
+          <div class="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            {{ arm.error || 'This arm failed.' }}
+          </div>
+        }
+      </div>
+    }
+  </div>
+}
