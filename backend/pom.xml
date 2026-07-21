@@ -19,7 +19,7 @@
 
     <properties>
         <java.version>21</java.version>
-        <spring-ai.version>1.1.8</spring-ai.version>
+        <spring-ai.version>2.0.0</spring-ai.version>
         <resilience4j.version>2.3.0</resilience4j.version>
         <springdoc.version>2.8.17</springdoc.version>
         <google-java-format.version>1.35.0</google-java-format.version>
