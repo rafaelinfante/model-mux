@@ -22,7 +22,7 @@
         <spring-ai.version>1.1.8</spring-ai.version>
         <resilience4j.version>2.3.0</resilience4j.version>
         <springdoc.version>2.8.17</springdoc.version>
-        <google-java-format.version>1.35.0</google-java-format.version>
+        <google-java-format.version>1.36.1</google-java-format.version>
         <jtokkit.version>1.1.0</jtokkit.version>
 
         <!-- google-java-format reaches into jdk.compiler internals, so every JVM that runs it
